@@ -91,7 +91,7 @@ exports.getPluginConfig = (slug, config) => {
             return Object.assign({}, config, JSON.parse(content));
         }
         else {
-            exports.setConfig(slug, config);
+            exports.setPluginConfig(slug, config);
             return Object.assign({}, config, {});
         }
     }
@@ -101,7 +101,11 @@ exports.getPluginConfig = (slug, config) => {
 exports.scanPluginDirectory = () => {
     fs.mkdirSync(LiteLoader.path.plugins, { recursive: true });
     return fs.readdirSync(LiteLoader.path.plugins, { withFileTypes: true })
-        .map(dirent => path.join(dirent.path, dirent.name, "manifest.json"))
+        .map(dirent => {
+            // Node ≥20: parentPath; older Electron: path
+            const parent = dirent.parentPath ?? dirent.path ?? LiteLoader.path.plugins;
+            return path.join(parent, dirent.name, "manifest.json");
+        })
         .filter(manifest => fs.existsSync(manifest))
         .map(manifest => ({
             path: path.dirname(manifest),

@@ -1,3 +1,5 @@
+// Ensure global LiteLoader + protocol/API are ready before other main modules.
+const { paths } = require("./main/api.js");
 const store = require("./main/store.js");
 const { installHook } = require("./main/hook.js");
 const { loadAllPlugins } = require("./main/loader.js");
@@ -16,7 +18,17 @@ for (const plugin of Object.values(LiteLoader.plugins)) {
 }
 
 if (!globalThis.qwqnt) {
-    const main_path = "./application.asar/app_launcher/index.js";
-    require(require("path").join(process.resourcesPath, "app", main_path));
-    setImmediate(() => global.launcher.installPathPkgJson.main = main_path);
+    // entry_main matches official package.json main shape (./application.asar/...)
+    // Always points at host QQ.app (path.js rewrites helper resourcesPath).
+    const main_path = paths.entry_main;
+    require(paths.entry);
+    setImmediate(() => {
+        try {
+            if (global.launcher?.installPathPkgJson) {
+                global.launcher.installPathPkgJson.main = main_path;
+            }
+        } catch (error) {
+            console.log("[Main] restore installPathPkgJson.main failed:", error);
+        }
+    });
 }

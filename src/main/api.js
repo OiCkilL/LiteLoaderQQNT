@@ -1,23 +1,29 @@
 const path = require("path");
+const { pathToFileURL } = require("url");
 const electron = require("electron");
 const store = require("./store.js");
+const { resolvePaths } = require("./path.js");
+
+const paths = resolvePaths();
 
 const LiteLoader = Object.create(null);
 
 LiteLoader.plugins = Object.create(null);
 
+// Public path API — keep original field names for plugin compatibility
 LiteLoader.path = Object.create(null);
-LiteLoader.path.root = path.dirname(path.dirname(__dirname));
-LiteLoader.path.profile = process.env.LITELOADERQQNT_PROFILE ?? (globalThis.qwqnt ?
-    path.join(globalThis.qwqnt.framework.paths.data, "LiteLoader") :
-    LiteLoader.path.root
-);
-LiteLoader.path.data = path.join(LiteLoader.path.profile, "data");
-LiteLoader.path.plugins = path.join(LiteLoader.path.profile, "plugins");
+LiteLoader.path.root = paths.root;
+LiteLoader.path.profile = paths.profile;
+LiteLoader.path.data = paths.data;
+LiteLoader.path.plugins = paths.plugins;
+// Additive (non-breaking) fields for installers / diagnostics
+LiteLoader.path.qq_app = paths.qq_app;
+LiteLoader.path.entry = paths.entry;
+LiteLoader.path.entry_main = paths.entry_main;
 
 LiteLoader.package = Object.create(null);
 LiteLoader.package.liteloader = require(path.join(LiteLoader.path.root, "package.json"));
-LiteLoader.package.qqnt = require(path.join(process.resourcesPath, "app", "package.json"));
+LiteLoader.package.qqnt = require(path.join(paths.qq_app, "package.json"));
 
 LiteLoader.versions = Object.create(null);
 LiteLoader.versions.liteloader = LiteLoader.package.liteloader.version;
@@ -31,7 +37,7 @@ LiteLoader.os.platform = process.platform;
 
 LiteLoader.api = Object.create(null);
 LiteLoader.api.openExternal = (url) => (electron.shell.openExternal(url), true);
-LiteLoader.api.openPath = (path) => (electron.shell.openPath(path), true);
+LiteLoader.api.openPath = (p) => (electron.shell.openPath(p), true);
 
 LiteLoader.api.config = Object.create(null);
 LiteLoader.api.config.set = store.setPluginConfig;
@@ -77,16 +83,35 @@ electron.app.on("ready", () => {
     electron.app.commandLine.appendSwitch("fetch-schemes", new_schemes);
 });
 
+/**
+ * local:// protocol — host semantics unchanged for plugin compatibility:
+ *   local://root/...     → LiteLoader.path.root
+ *   local://profile/...  → LiteLoader.path.profile
+ *   local://<host>/...   → absolute path (host + pathname)
+ * File URL construction uses pathToFileURL for spaces / unicode safety.
+ */
 exports.protocolRegister = (protocol) => {
     if (!protocol.isProtocolRegistered("local")) {
         protocol.handle("local", (req) => {
             const { host, pathname } = new URL(decodeURI(req.url));
             const filepath = path.normalize(pathname.slice(1));
+            let absolute;
             switch (host) {
-                case "root": return electron.net.fetch(`file:///${LiteLoader.path.root}/${filepath}`);
-                case "profile": return electron.net.fetch(`file:///${LiteLoader.path.profile}/${filepath}`);
-                default: return electron.net.fetch(`file://${host}/${filepath}`);
+                case "root":
+                    absolute = path.join(LiteLoader.path.root, filepath);
+                    break;
+                case "profile":
+                    absolute = path.join(LiteLoader.path.profile, filepath);
+                    break;
+                default:
+                    // Preserve original absolute mapping (Windows drive / Unix root host)
+                    absolute = path.normalize(`${host}/${filepath}`);
+                    break;
             }
+            return electron.net.fetch(pathToFileURL(absolute).href);
         });
     }
-}
+};
+
+// Export resolved paths for main bootstrap (not part of public LiteLoader surface)
+exports.paths = paths;
