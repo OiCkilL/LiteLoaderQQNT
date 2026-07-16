@@ -1,98 +1,168 @@
-# LiteLoaderQQNT
+# LiteLoaderQQNT（macOS 优化 fork）
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/github/v/release/LiteLoaderQQNT/LiteLoaderQQNT?logo=github)](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT/releases)
-[![Follow on Telegram](https://img.shields.io/badge/Follow-Telegram-blue?logo=telegram)](https://t.me/LiteLoaderQQNT)
+[![Upstream](https://img.shields.io/badge/upstream-LiteLoaderQQNT-blue?logo=github)](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT)
 
-> 轻量 · 简洁 · 开源 · 福瑞
+> 基于 [LiteLoaderQQNT](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT) 的社区 fork，**优先打磨 macOS（App Sandbox）** 下的安装、路径与多进程稳定性。  
+> 插件 API、`local://` 协议与上游保持兼容。
 
-LiteLoaderQQNT 是 QQNT 的插件加载器，一般在 QQNT 的环境内简称为 LiteLoader。它可以让你自由地为 QQNT 添加各种插件，实现美化主题、增加功能等各种功能。详情查看 LiteLoaderQQNT 官网：<https://liteloaderqqnt.github.io>。
+LiteLoaderQQNT（简称 LiteLoader）是 QQNT 的插件加载器，可为 QQ 增加主题、功能扩展等。上游官网：<https://liteloaderqqnt.github.io>。
 
+<!-- prettier-ignore -->
 > [!CAUTION]
-> QQ 安全中心可能会将 LiteLoaderQQNT 当作“非法外挂工具”并下线您的设备，还有可能封禁您的账号。**请谨慎使用 LiteLoaderQQNT。**
+> QQ 安全中心可能将 LiteLoader 视为「非法外挂」，导致设备下线或账号风险。**请自行评估后再使用。**  
+> 本项目仅供学习与研究，使用后果自负。
 
-## 安装
+## 本 fork 做了什么
 
-> [!NOTE]
-> 此版本的 LiteLoaderQQNT 需搭配频道内未公开的 `dbghelp.dll` 方可使用。
-> 或使用 https://github.com/LiteLoaderQQNT/QQNTFileVerifyPatch/releases/tag/Patcher_v1.0.4 修补 QQNT.dll 文件
+在兼容上游插件生态的前提下，针对 **macOS 官方 QQ（沙盒版）** 做了入口与路径加固：
 
-### 下载 LiteLoaderQQNT 本体
+| 能力 | 说明 |
+|------|------|
+| 沙盒可读安装位 | 推荐把本体放在 QQ 容器目录内，避免 `EPERM` 读不到 `~/Developer` 等路径 |
+| 显式入口 | `require(.../src/main.js)`，不再 `require(目录)` |
+| fail-open | 加载失败时回退官方入口，尽量不把整个 QQ 打挂 |
+| QQEX* 子进程 | `QQEXDOC` / `QQEXGuild` 等 helper **不注入** LiteLoader，只走主 QQ 的 stock 入口，消除弹窗 |
+| 路径中心化 | `src/main/path.js`：`root` / `profile` / 主包 `Resources/app` 解析 |
+| 安装脚本 | `scripts/install-macos.sh` 写入 `ml_install.js` 并备份 `package.json` |
 
-你需要先下载 LiteLoaderQQNT 到任意位置，以下有两种方式：
+上游 Windows / 通用文档仍以 [原仓库](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT) 为准；本 README 以 **macOS** 为主。
 
-- Release （稳定版）：前往 [Release](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT/releases) 页，下载 `LiteLoaderQQNT.zip` 文件解压到任意位置。
-- Clone （最新提交）：使用 Git 工具将 LiteLoaderQQNT 仓库 Clone 到本地任意位置。
+## 致谢
 
-    ```bash
-    git clone --depth 1 https://github.com/LiteLoaderQQNT/LiteLoaderQQNT.git
-    ```
+本 fork 的分析、改造与排障离不开以下支持，**特别感谢**：
 
-### 在 Windows 上绕过 QQNT 文件校验
+- **[Grok Build](https://x.ai)**（xAI）  
+  在 macOS 沙盒、`resourcesPath` 多进程、入口 fail-open 与路径模型上的结对实现与调试。
+- **[Linux.do](https://linux.do) 论坛**  
+  社区里关于 **Vibe coding**（与 AI 结对编程、工作流与工程实践）的讨论与氛围，让这次改造能以更高效的方式推进。
 
-请根据你的操作系统架构在 [Telegram 群](https://t.me/LiteLoaderQQNT)内下载 `dbghelp_*.dll` 文件，将其重命名为 `dbghelp.dll` 后放入 `QQ.exe` 同级目录下。
+同时感谢：
 
-> [!NOTE]
-> 加群前请先查看群简介。
-> 加群时请查看验证机器人 [NeoAuthBot](https://t.me/NeoAuthBot) 的消息
+- **[LiteLoaderQQNT](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT)** 原作者与维护者，以及全体插件开发者  
+- 上游文档、Telegram 频道与插件列表的贡献者  
 
-### 修改文件以安装
-1. 转到 QQNT 安装目录。以 `9.9.21-38711` 为例，路径为 `QQNT\versions\9.9.21-38711（取决于你的版本）\resources\app`
+没有上游项目与社区，就不会有这个 fork。
 
-2. 创建 `app_launcher`目录。
+## 风险与前置条件
 
-3. 在该目录内创建 `LiteLoader.js` 文件（文件名可随意设定， 需保留拓展名 `.js`），并写入以下内容：
+1. **文件完整性**  
+   修改 `package.json` 的 `main` 会触发 QQ 的完整性校验。你仍需要自行准备可用的绕过方案（例如社区常见的校验补丁；Windows 上还有 `dbghelp` 等方案，见上游说明）。  
+   **本仓库不包含、也不分发任何校验绕过二进制。**
 
-    ```javascript
-    require(String.raw`修改为 LiteLoaderQQNT 本体的绝对路径，保留反引号`)
-    ```
+2. **账号与合规**  
+   使用插件加载器可能违反 QQ 用户协议，存在封号 / 设备下线风险。
 
-4. 修改 `app\package.json` 文件，将 `main` 后值改为 `./app_launcher/LiteLoader.js`，其中 `LiteLoader` 即为你创建的文件名。
+3. **版本**  
+   在 macOS QQ `6.9.96` 一带验证过主路径与 QQEX helper；大版本升级后请重新检查入口与脚本。
 
-   ```diff
-   -   "main": "./application.asar/app_launcher/index.js",
-   +   "main": "./app_launcher/LiteLoader.js",
-   ```
+## macOS 安装（推荐）
 
-### 更改插件数据目录 （可选）
+### 1. 准备 QQ
 
-支持设置 `LITELOADERQQNT_PROFILE` 环境变量指定 `data` `plugins` 存储位置，即可不在本体目录进行读写操作。当本体目录无写权限时（如 MacOS 与 Linux 平台 QQNT，以及类似于 flatpak 打包的 QQNT），请设定该变量到当前用户具有可读写权限的位置。
+使用**未改 main 的官方包**（或你信任的干净安装），确认能正常启动。
 
-如果你想将本体与存储目录合并在一起需将 `LITELOADERQQNT_PROFILE` 环境变量删除，将 `data` `plugins` 移动回本体根目录下。
+可选：清除隔离属性
 
-### 检查是否安装成功
+```bash
+sudo xattr -cr /Applications/QQ.app
+```
 
-按照上述教程完成安装后，有两种方法检查 LiteLoaderQQNT 是否成功安装：
+### 2. 放置 LiteLoader 本体（必须在沙盒内）
 
-- 运行 QQNT 并打开设置，查看左侧列表是否出现 LiteLoaderQQNT 选项
-- 使用终端运行 QQNT 查看是否有 LiteLoaderQQNT 相关内容输出显示
+QQ 开启 App Sandbox 后，**不能**从 `~/Developer` 等容器外路径 `require` 本体（会 `EPERM`）。
 
-如果有显示，即安装成功，玩的开心！
+推荐目录：
+
+```text
+~/Library/Containers/com.tencent.qq/Data/Documents/LiteLoaderQQNT
+```
+
+示例：把本仓库同步到该目录（保留已有 `plugins` / `data`）：
+
+```bash
+DEST="$HOME/Library/Containers/com.tencent.qq/Data/Documents/LiteLoaderQQNT"
+mkdir -p "$DEST"
+rsync -a --delete \
+  --exclude '.git' --exclude 'reference' --exclude 'plugins' --exclude 'data' \
+  ./ "$DEST/"
+```
+
+### 3. 注入入口
+
+```bash
+# 在本仓库根目录执行；第二个参数指向「沙盒内」本体路径
+sudo ./scripts/install-macos.sh \
+  /Applications/QQ.app \
+  "$HOME/Library/Containers/com.tencent.qq/Data/Documents/LiteLoaderQQNT"
+```
+
+脚本会：
+
+- 备份 `Resources/app/package.json` → `package.json.liteloader-backup`
+- 写入 `Resources/app/app_launcher/ml_install.js`
+- 将 `package.json` 的 `main` 设为 `./app_launcher/ml_install.js`
+
+### 4. 配置完整性绕过
+
+按你现有的、可用的方案处理（与上游社区一致）。未绕过时，改 `package.json` 后可能无法正常启动。
+
+### 5. 验证
+
+1. 完全退出 QQ 后重新打开。  
+2. 打开 **设置**，侧栏出现 **LiteLoaderQQNT**。  
+3. 终端启动时可看到加载相关日志；打开文档等能力时 **不应** 再弹出 `QQEXDOC...application.asar` 找不到模块。
+
+## 路径与环境变量
+
+| 变量 | 含义 |
+|------|------|
+| `LITELOADERQQNT_ROOT` | 框架代码根（含 `package.json` 与 `src/`） |
+| `LITELOADERQQNT_PROFILE` | 可写数据根（其下为 `plugins/`、`data/`） |
+
+未设置时：
+
+- `root`：由入口钉死的路径，或自动探测  
+- `profile`：优先沿用已有容器内数据目录；否则与 `root` 相同（与上游习惯兼容）
+
+开发时在 git 仓库改代码后，再 `rsync` 到容器内路径即可，无需把 git 放进容器。
 
 ## 插件
 
-### 正常操作
+- 设置页可安装 / 管理插件。  
+- 手动：插件目录放到 `profile/plugins/<slug>/`，数据在 `profile/data/<slug>/`。  
+- 寻找插件：上游官网、[插件列表](https://github.com/LiteLoaderQQNT/Plugin-List/blob/v4/plugins.json)、GitHub 搜索。
 
-在设置界面即可看到安装/卸载插件功能；也可以使用社区开发的插件市场类插件（例如 [plugin-list-viewer](https://github.com/ltxhhz/LL-plugin-list-viewer)），在其中进行操作。
-
-### 手动操作
-
-将插件目录移动到 `LiteLoaderQQNT/plugins` 文件夹内以安装，在 `plugins` 目录中删除对应目录以卸载（插件数据在 `data` 目录下对应目录）。
-
-### 寻找
-
-可以通过以下方式寻找插件：
-
-- 官网首页
-- 第三方插件市场
-- GitHub 搜索
-
-官方维护着一份插件列表，收录了已知的大部分插件，可在官网首页中查看详情。此外，还有一份 [JSON 格式的插件列表](https://github.com/LiteLoaderQQNT/Plugin-List/blob/v4/plugins.json)。
+插件 `manifest` 与 `LiteLoader.api` / `local://root` · `local://profile` 与上游一致，原有插件一般可直接使用。
 
 ## 开发
 
-详见[官方文档](https://liteloaderqqnt.github.io/docs/introduction.html)。
+- 插件开发文档见 [上游介绍](https://liteloaderqqnt.github.io/docs/introduction.html)。  
+- 本 fork 关键改动文件：  
+  - `src/main/path.js` — 路径解析  
+  - `src/main/api.js` / `src/main.js` — 启动与协议  
+  - `scripts/ml_install.template.js` / `scripts/install-macos.sh` — macOS 入口  
+
+同步上游：
+
+```bash
+git fetch upstream
+git merge upstream/main
+```
+
+## 与上游的关系
+
+| | 上游 LiteLoaderQQNT | 本 fork |
+|--|---------------------|---------|
+| 定位 | 全平台插件加载器 | 同左 + **macOS 加固** |
+| 安装文档 | Win / 通用为主 | **macOS 沙盒流程** 为主 |
+| 插件协议 | manifest v4 等 | **兼容** |
+| 维护 | 官方组织 | 社区 fork（[OiCkilL/LiteLoaderQQNT](https://github.com/OiCkilL/LiteLoaderQQNT)） |
+
+欢迎把可合并的修复以 PR 形式回馈上游（若适用）。
 
 ## 许可证
 
-LiteLoaderQQNT 采用 [MIT 许可证](./LICENSE) 进行开源。
+与上游相同，采用 [MIT License](./LICENSE)。
+
+再次感谢 **Grok Build**、**Linux.do** 与 **LiteLoaderQQNT** 社区。
