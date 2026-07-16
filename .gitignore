@@ -1,3 +1,7 @@
 plugins
 data
 application
+reference/
+.omc/
+*.i64
+ida-out/
