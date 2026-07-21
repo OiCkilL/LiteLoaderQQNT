@@ -93,7 +93,19 @@ function resolveQqApp() {
 function normalizeMainField(main) {
     if (!main) return null;
     const s = String(main);
-    if (s.includes("ml_install") || s.includes("LiteLoader")) return null;
+    // Reject loader / Mode B shims so stock entry never points at ourselves.
+    // (Mode B CreateFileW shadow rewrites package.json main in-memory only.)
+    if (
+        s.includes("ml_install") ||
+        s.includes("LiteLoader") ||
+        s.includes("ll_mode_b") ||
+        s.includes("mode_b_bridge") ||
+        s.includes("ll_mode_b_bridge") ||
+        s.includes("ll_bootstrap") ||
+        s.includes("ll_bootstrap.js")
+    ) {
+        return null;
+    }
     return s.startsWith("./") ? s : `./${s}`;
 }
 

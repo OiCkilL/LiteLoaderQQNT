@@ -1,0 +1,23 @@
+# Paths relative to repo root that are OPEN-eligible for upstream / public mirror.
+# Used by scripts/export-open-src.ps1
+# Lines: path or glob-style prefix. # comments. Empty lines ignored.
+
+# Loader body
+src/
+
+# macOS installer (open)
+scripts/install-macos.sh
+scripts/ml_install.template.js
+
+# Package metadata
+package.json
+manifest.schema.json
+LICENSE
+README.md
+
+# Sync docs (for contributors; not required by upstream tree)
+docs/OPEN_SYNC.md
+docs/HANDOFF_MAC.md
+scripts/open-allowlist.txt
+scripts/open-denylist.txt
+scripts/export-open-src.ps1

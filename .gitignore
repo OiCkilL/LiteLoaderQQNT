@@ -1,7 +1,7 @@
 plugins
 data
 application
-reference/
+dist/
+node_modules/
+.DS_Store
 .omc/
-*.i64
-ida-out/

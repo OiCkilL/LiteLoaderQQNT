@@ -13,11 +13,6 @@ const TRIGGERS = [
     update
 ];
 
-/**
- * 监听指定元素，如果不存在则等待其出现
- * @param {string} target - 目标选择器
- * @param {Function} callback - 回调函数
- */
 function watchElement(target, callback) {
     const check = () => {
         const element = document.querySelector(target);
@@ -29,17 +24,12 @@ function watchElement(target, callback) {
     const observer = new MutationObserver(() => {
         if (check()) observer.disconnect();
     });
-    observer.observe(document, {
+    observer.observe(document.documentElement || document, {
         subtree: true,
         childList: true
     });
 }
 
-/**
- * 监听 hash 变化
- * @param {string} target - 目标页面
- * @param {Function} callback - 回调函数
- */
 function watchHash(target, callback) {
     const check = () => {
         if (!location.hash.includes(target)) return false;
@@ -47,14 +37,56 @@ function watchHash(target, callback) {
         return true;
     };
     if (check()) return;
-    navigation.addEventListener("navigatesuccess", check, { once: true });
+    try {
+        navigation.addEventListener("navigatesuccess", check);
+    } catch {
+        window.addEventListener("hashchange", check);
+        window.addEventListener("popstate", check);
+    }
 }
 
-/**
- * 注册所有触发器
- */
+// Classic hash-based triggers
 TRIGGERS.forEach((trigger) => {
     watchHash(trigger.hash, () => {
         watchElement(trigger.selector, trigger.action);
-    })
+    });
 });
+
+function tryMountSettings(reason) {
+    try {
+        if (document.querySelector(".nav-bar.liteloader") || document.querySelector("[data-slug='config_view']")) {
+            return;
+        }
+        setting.action();
+        console.log("[LL] tryMountSettings", reason, !!document.querySelector(".nav-bar.liteloader"));
+    } catch (e) {
+        console.error("[LL] setting action", reason, e);
+    }
+}
+
+// QQ 9.9+ may open settings without stable #/setting hash — also watch DOM
+watchElement(".setting-tab", () => tryMountSettings("setting-tab"));
+watchElement(".setting-tab .nav-bar, .setting-tab [class*='nav']", () => tryMountSettings("nav"));
+watchElement("[class*='setting-tab']", () => tryMountSettings("setting-tab*"));
+watchElement("[class*='SettingTab']", () => tryMountSettings("SettingTab"));
+
+// Periodic retry while settings shell may mount asynchronously
+let settingRetries = 0;
+const settingTimer = setInterval(() => {
+    settingRetries += 1;
+    if (document.querySelector(".nav-bar.liteloader") || document.querySelector("[data-slug='config_view']")) {
+        clearInterval(settingTimer);
+        return;
+    }
+    if (
+        document.querySelector(".setting-tab") ||
+        document.querySelector("[class*='setting-tab']") ||
+        document.querySelector("[class*='SettingTab']") ||
+        location.hash.includes("setting")
+    ) {
+        tryMountSettings("timer");
+    }
+    if (settingRetries > 60) clearInterval(settingTimer);
+}, 500);
+
+console.log("[LL] renderer triggers armed", location.href);
