@@ -3,6 +3,7 @@ const { pathToFileURL, fileURLToPath } = require("url");
 const electron = require("electron");
 const store = require("./store.js");
 const { resolvePaths } = require("./path.js");
+const { resolveLocalUrl } = require("./local_url.js");
 
 const paths = resolvePaths();
 
@@ -268,14 +269,17 @@ electron.app.on("ready", () => {
 });
 
 /**
- * local:// protocol — host semantics unchanged for plugin compatibility:
- *   local://root/...     → LiteLoader.path.root
- *   local://profile/...  → LiteLoader.path.profile
- *   local://<host>/...   → absolute path (host + pathname)
+ * local:// protocol — plugin-compatible hosts, plus POSIX extras:
+ *   local://root/...      → LiteLoader.path.root
+ *   local://profile/...   → LiteLoader.path.profile
+ *   local:///C:/...       → Windows drive (host empty)
+ *   local:///Users/...    → POSIX absolute (also local://// from list-viewer)
+ *   local://Users/...     → Chromium collapsed extra slashes into the host
  *
  * Read via fs (not net.fetch(file://)): QQ/Electron often returns FILE_NOT_FOUND
  * for net.fetch on absolute paths under user profile, which then polluted the
  * settings sidebar when appropriateIcon() injected the error body as SVG.
+ * Misses log to LiteLoader.path.root/ll_local_protocol.log (TEMP fallback).
  */
 function mimeForExt(ext) {
     switch (String(ext || "").toLowerCase()) {
@@ -314,52 +318,15 @@ function mimeForExt(ext) {
     }
 }
 
-function resolveLocalUrl(reqUrl) {
-    // Prefer raw URL; decodeURI can break already-decoded Windows paths
-    let raw = String(reqUrl || "");
-    try { raw = decodeURI(raw); } catch { /* keep raw */ }
-    const u = new URL(raw);
-    const host = (u.hostname || u.host || "").toString();
-    // pathname: strip leading slashes; drop query (cache-bust) already excluded by URL API
-    let filepath = decodeURIComponent(u.pathname || "").replace(/^\/+/, "");
-    // list-viewer style: C://Users/... → C:/Users/...
-    filepath = filepath.replace(/^([a-zA-Z]):\/\//, "$1:/");
-    filepath = path.normalize(filepath);
-
-    let absolute;
-    switch (host) {
-        case "root":
-            absolute = path.join(LiteLoader.path.root, filepath);
-            break;
-        case "profile":
-            absolute = path.join(LiteLoader.path.profile, filepath);
-            break;
-        default:
-            // Absolute Windows path: local:///C:/Users/... (host empty)
-            // or local://C/Users/... (host = drive letter)
-            if (!host && /^[a-zA-Z]:[\\/]/.test(filepath)) {
-                absolute = path.normalize(filepath);
-            } else if (/^[a-zA-Z]$/.test(host)) {
-                // host "C", pathname "/Users/..." or "Users/..."
-                const rest = filepath.replace(/^[\\/]+/, "");
-                absolute = path.normalize(`${host}:\\${rest}`);
-            } else if (!host && filepath) {
-                absolute = path.normalize(filepath);
-            } else {
-                absolute = path.normalize(path.join(host, filepath));
-            }
-            break;
-    }
-    return absolute;
-}
-
 function localProtocolLog(msg) {
+    const line = `[LL local] ${new Date().toISOString()} ${msg}\n`;
     try {
-        fs.appendFileSync(
-            path.join(process.env.TEMP || ".", "ll_local_protocol.log"),
-            `[LL local] ${new Date().toISOString()} ${msg}\n`
-        );
-    } catch { /* ignore */ }
+        fs.appendFileSync(path.join(LiteLoader.path.root, "ll_local_protocol.log"), line);
+    } catch {
+        try {
+            fs.appendFileSync(path.join(process.env.TEMP || ".", "ll_local_protocol.log"), line);
+        } catch { /* ignore */ }
+    }
 }
 
 exports.protocolRegister = (protocol) => {
@@ -367,7 +334,12 @@ exports.protocolRegister = (protocol) => {
         protocol.handle("local", async (req) => {
             let absolute = "";
             try {
-                absolute = resolveLocalUrl(req.url);
+                absolute = resolveLocalUrl(req.url, LiteLoader.path);
+                // Chromium lowercases the URL host; local://Users/... becomes local://users/...
+                if (process.platform === "darwin" && absolute.startsWith("/users/") && !fs.existsSync(absolute)) {
+                    const alt = "/Users/" + absolute.slice("/users/".length);
+                    if (fs.existsSync(alt)) absolute = alt;
+                }
                 // Security: only serve files that exist as regular files
                 let st;
                 try {

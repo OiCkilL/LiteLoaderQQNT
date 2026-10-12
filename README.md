@@ -25,6 +25,7 @@ LiteLoaderQQNT（简称 LiteLoader）是 QQNT 的插件加载器，可为 QQ 增
 | QQEX* 子进程 | `QQEXDOC` / `QQEXGuild` 等 helper **不注入** LiteLoader，只走主 QQ 的 stock 入口，消除弹窗 |
 | 路径中心化 | `src/main/path.js`：`root` / `profile` / 主包 `Resources/app` 解析 |
 | 安装脚本 | `scripts/install-macos.sh` 写入 `ml_install.js` 并备份 `package.json` |
+| `local://` | 主进程 `fs.readFile` + MIME；兼容 POSIX 绝对路径与 Chromium 折叠 host；404 空 body |
 
 上游 Windows / 通用文档仍以 [原仓库](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT) 为准；本 README 以 **macOS** 为主。
 
@@ -54,7 +55,7 @@ LiteLoaderQQNT（简称 LiteLoader）是 QQNT 的插件加载器，可为 QQ 增
    使用插件加载器可能违反 QQ 用户协议，存在封号 / 设备下线风险。
 
 3. **版本**  
-   在 macOS QQ `6.9.96` 一带验证过主路径与 QQEX helper；大版本升级后请重新检查入口与脚本。
+   在 macOS QQ `7.0.2`（53644，Electron 40 / Chrome 144）上验证过主路径、QQEX helper、设置页，以及 list-viewer / scriptio / transitio 的 `local://` 设置 HTML。此前 `6.9.96` 一带同样可用。大版本升级后请重新检查入口与脚本。
 
 ## macOS 安装（推荐）
 
@@ -135,13 +136,35 @@ sudo ./scripts/install-macos.sh \
 
 插件 `manifest` 与 `LiteLoader.api` / `local://root` · `local://profile` 与上游一致，原有插件一般可直接使用。
 
+## `local://` 协议
+
+设置页 HTML、插件图标、主题资源走自定义协议 `local://`。主进程用 `fs.readFile` 按扩展名返回 MIME，**不要**用 `net.fetch(file://)` 读用户目录（Electron 40 / QQ 7 上经常 `FILE_NOT_FOUND`）。
+
+| URL | 解析到 |
+|-----|--------|
+| `local://root/...` | LiteLoader 安装根 |
+| `local://profile/...` | 可写 profile |
+| `local:///abs/...` 或 `local:////abs/...` | POSIX 绝对路径。list-viewer / scriptio / transitio 常用 `` local:///${pluginPath}/assets/view.html `` |
+| `local://Users/...` / `local://users/...` | Chromium 把多余斜杠折进 host，并把 host 小写后的形态 |
+
+404 必须返回**空 body**。失败文本一旦进 `innerHTML`（例如 `appropriateIcon()`），侧栏会出现截断的 `ocol error: FILE_NOT_FOUND`。
+
+新代码优先写 `local://root/...`。解析实现在 `src/main/local_url.js`。自测：
+
+```bash
+node scripts/test-local-url.js
+```
+
+MISS 日志写在安装根下的 `ll_local_protocol.log`（沙盒内可读；写失败则回退 `TEMP`）。
+
 ## 开发
 
 - 插件开发文档见 [上游介绍](https://liteloaderqqnt.github.io/docs/introduction.html)。  
 - 本 fork 关键改动文件：  
   - `src/main/path.js` — 路径解析  
-  - `src/main/api.js` / `src/main.js` — 启动与协议  
+  - `src/main/local_url.js` / `src/main/api.js` / `src/main.js` — 启动与 `local://`  
   - `scripts/ml_install.template.js` / `scripts/install-macos.sh` — macOS 入口  
+  - `scripts/test-local-url.js` — `local://` 解析用例  
 
 同步上游：
 
